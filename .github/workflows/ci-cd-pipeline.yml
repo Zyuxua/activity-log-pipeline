@@ -1,0 +1,95 @@
+name: CI/CD Pipeline Advanced
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: 20
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm install
+      - run: npm test
+      - run: |
+          npm run build
+          zip -r build.zip dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-artifact
+          path: build.zip
+      - name: Determine Version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+          PATCH=$((PATCH+1))
+          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+          echo "New version: $NEW_VERSION"
+
+  deploy-dev:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-artifact
+      - run: |
+          gh release create "dev-v${{ env.NEW_VERSION }}" build.zip --notes "Dev build for testing"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-staging:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-artifact
+      - run: |
+          gh release create "staging-v${{ env.NEW_VERSION }}" build.zip --notes "Pre-production test release"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-production:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-artifact
+      - name: Release Production Build
+        id: prod_release
+        run: |
+          set -e
+          if gh release create "prod-v${{ env.NEW_VERSION }}" build.zip --notes "Production release"; then
+            echo "✅ Production release succeeded"
+          else
+            echo "❌ Release failed, deleting tag..."
+            git tag -d "prod-v${{ env.NEW_VERSION }}"
+            git push origin :refs/tags/"prod-v${{ env.NEW_VERSION }}"
+            exit 1
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Notify Success
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.issues.createComment({
+              issue_number: 1,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `✅ Production release prod-v${process.env.NEW_VERSION} completed successfully!`
+            })
