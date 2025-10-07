@@ -1,5 +1,10 @@
 name: CI/CD Pipeline Advanced
 
+# 允許 GITHUB_TOKEN 在 workflow 中寫入 repo contents (tag/release)
+permissions:
+  contents: write
+  issues: write
+
 on:
   push:
     branches: [ main ]
