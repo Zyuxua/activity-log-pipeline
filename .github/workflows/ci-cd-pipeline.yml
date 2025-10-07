@@ -11,79 +11,137 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ steps.version.outputs.new_version }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - run: npm install
-      - run: npm test
-      - run: |
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build project
+        run: |
           npm run build
           zip -r build.zip dist
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
         with:
           name: build-artifact
           path: build.zip
+
       - name: Determine Version
         id: version
         run: |
+          # 讀取 package.json version，patch +1
           VERSION=$(node -p "require('./package.json').version")
           IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
           PATCH=$((PATCH+1))
           NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+          echo "Computed NEW_VERSION=$NEW_VERSION"
+          # 將版本當作 step output (供 job output)
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          # 也放到 GITHUB_ENV 供本 job 使用（若需要）
           echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
-          echo "New version: $NEW_VERSION"
 
   deploy-dev:
     needs: build
     runs-on: ubuntu-latest
     environment: dev
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Checkout repo (for gh/git context)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
         with:
           name: build-artifact
-      - run: |
-          gh release create "dev-v${{ env.NEW_VERSION }}" build.zip --notes "Dev build for testing"
+
+      - name: Release Dev Build (create tag + release)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: dev-v${{ needs.build.outputs.new_version }}
+          NOTE: Dev build for testing
+        run: |
+          echo "Creating release $TAG"
+          gh release create "$TAG" build.zip --notes "$NOTE"
 
   deploy-staging:
     needs: build
     runs-on: ubuntu-latest
     environment: staging
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Checkout repo (for gh/git context)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
         with:
           name: build-artifact
-      - run: |
-          gh release create "staging-v${{ env.NEW_VERSION }}" build.zip --notes "Pre-production test release"
+
+      - name: Release Staging Build (create tag + release)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: staging-v${{ needs.build.outputs.new_version }}
+          NOTE: Pre-production test release
+        run: |
+          echo "Creating release $TAG"
+          gh release create "$TAG" build.zip --notes "$NOTE"
 
   deploy-production:
     needs: deploy-staging
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Checkout repo (for gh/git context)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
         with:
           name: build-artifact
+
       - name: Release Production Build
         id: prod_release
-        run: |
-          set -e
-          if gh release create "prod-v${{ env.NEW_VERSION }}" build.zip --notes "Production release"; then
-            echo "✅ Production release succeeded"
-          else
-            echo "❌ Release failed, deleting tag..."
-            git tag -d "prod-v${{ env.NEW_VERSION }}"
-            git push origin :refs/tags/"prod-v${{ env.NEW_VERSION }}"
-            exit 1
-          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Notify Success
+          TAG: prod-v${{ needs.build.outputs.new_version }}
+          NOTE: Production release
+        run: |
+          set -e
+          echo "Attempting production release $TAG"
+          if gh release create "$TAG" build.zip --notes "$NOTE"; then
+            echo "✅ Production release succeeded: $TAG"
+          else
+            echo "❌ Production release failed. Attempting cleanup..."
+            # 刪除可能已建立的 release（API via gh）
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              gh release delete "$TAG" -y || true
+            fi
+            # 刪除遠端 tag（若存在）
+            git tag -d "$TAG" || true
+            git push origin :refs/tags/"$TAG" || true
+            exit 1
+          fi
+
+      - name: Notify Success (create issue comment example)
         uses: actions/github-script@v7
         with:
           script: |
@@ -91,5 +149,7 @@ jobs:
               issue_number: 1,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `✅ Production release prod-v${process.env.NEW_VERSION} completed successfully!`
+              body: `✅ Production release ${process.env.TAG} completed successfully!`
             })
+        env:
+          TAG: prod-v${{ needs.build.outputs.new_version }}
