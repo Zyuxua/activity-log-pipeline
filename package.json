@@ -1,0 +1,12 @@
+{
+  "name": "activity-log",
+  "version": "1.0.0",
+  "description": "Demo project for CI/CD pipeline",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Running tests...\" && exit 0",
+    "build": "echo \"Building project...\" && mkdir -p dist && echo 'Built content' > dist/output.txt"
+  },
+  "author": "Student",
+  "license": "MIT"
+}
