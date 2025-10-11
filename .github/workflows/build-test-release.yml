@@ -86,9 +86,10 @@ jobs:
         id: create_release
         uses: actions/create-release@v1
         with:
-          tag_name: dev-v${{ needs.build.outputs.new_version }}
-          release_name: dev-v${{ needs.build.outputs.new_version }}
+          tag_name: dev-v-${{ github.run_number }}
+          release_name: dev-v-${{ github.run_number }}
           body: Automated dev release after successful tests
+         
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   
