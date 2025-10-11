@@ -60,8 +60,6 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     environment: dev
-    outputs:
-      dev_version: ${{ needs.build.outputs.new_version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -71,7 +69,7 @@ jobs:
         with:
           name: build-artifact
 
-      - name: Create Dev Release
+      - name: Release Dev Build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: dev-${{ needs.build.outputs.new_version }}
@@ -86,8 +84,6 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     environment: staging
-    outputs:
-      staging_version: ${{ needs.build.outputs.new_version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -97,7 +93,7 @@ jobs:
         with:
           name: build-artifact
 
-      - name: Create Staging Release
+      - name: Release Staging Build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: staging-${{ needs.build.outputs.new_version }}
@@ -105,7 +101,6 @@ jobs:
         run: |
           echo "Creating release $TAG"
           gh release create "$TAG" --notes "$NOTE"
-          echo "✅ Release created: $TAG"
           echo "🔹 Please manually upload build.zip in GitHub Releases"
 
   deploy-production:
@@ -121,12 +116,14 @@ jobs:
         with:
           name: build-artifact
 
-      - name: Create Production Release
+      - name: Release Production Build
+        id: prod_release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: prod-${{ needs.staging_version || needs.build.outputs.new_version }}
+          TAG: prod-${{ needs.build.outputs.new_version }}
           NOTE: Production release
         run: |
+          set -e
           echo "Attempting production release $TAG"
           if gh release create "$TAG" --notes "$NOTE"; then
             echo "✅ Production release succeeded: $TAG"
