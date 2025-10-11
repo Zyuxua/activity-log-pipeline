@@ -124,8 +124,8 @@ jobs:
 
       - name: Debug: print resolved versions
         run: |
-          echo "needs.build.outputs.new_version = '${{ needs.build.outputs.new_version || '' }}'"
-          echo "needs.deploy-staging.outputs.staging_version = '${{ needs.deploy-staging.outputs.staging_version || '' }}'"
+          echo "needs.build.outputs.new_version = '${{ needs.build.outputs.new_version }}'"
+          echo "needs.deploy-staging.outputs.staging_version = '${{ needs.deploy-staging.outputs.staging_version }}'"
 
       - name: Create Production Release
         id: prod_release
