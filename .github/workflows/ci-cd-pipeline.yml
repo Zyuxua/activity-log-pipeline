@@ -27,12 +27,8 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Run aggregated tests (mock)
-        run: |
-          echo "Running aggregated tests..."
-          echo "→ unit tests: OK"
-          echo "→ integration tests: OK"
-          exit 0
+      - name: Run tests
+        run: npm test
 
       - name: Build project
         run: |
@@ -48,14 +44,15 @@ jobs:
       - name: Determine Version
         id: version
         run: |
+          # 讀取 package.json version，patch +1
           VERSION=$(node -p "require('./package.json').version")
           IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
           PATCH=$((PATCH+1))
-          NEW_VERSION="$MAJOR.$MINOR.$PATCH-$(date +%s)"
+          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
           echo "Computed NEW_VERSION=$NEW_VERSION"
-          # 設為 job output
+          # 將版本當作 step output (供 job output)
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          # 也放到 GITHUB_ENV（如果要在步驟中讀）
+          # 也放到 GITHUB_ENV 供本 job 使用（若需要）
           echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
 
   deploy-dev:
@@ -63,93 +60,86 @@ jobs:
     runs-on: ubuntu-latest
     environment: dev
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo (for gh/git context)
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v4
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
         with:
           name: build-artifact
 
-      - name: Create Dev Release
+      - name: Release Dev Build (create tag + release)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: dev-${{ needs.build.outputs.new_version }}
+          TAG: dev-v${{ needs.build.outputs.new_version }}
           NOTE: Dev build for testing
         run: |
           echo "Creating release $TAG"
-          gh release create "$TAG" --notes "$NOTE" || true
-          echo "✅ Release created (or already exists): $TAG"
-          echo "🔹 Please manually upload build.zip in GitHub Releases if missing"
+          gh release create "$TAG" build.zip --notes "$NOTE"
 
   deploy-staging:
     needs: build
     runs-on: ubuntu-latest
     environment: staging
-    # 重要：把 build 的 new_version 傳到 deploy-staging 的 outputs，讓之後的 job 可以使用
-    outputs:
-      staging_version: ${{ needs.build.outputs.new_version }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo (for gh/git context)
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v4
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
         with:
           name: build-artifact
 
-      - name: Create Staging Release
+      - name: Release Staging Build (create tag + release)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: staging-${{ needs.build.outputs.new_version }}
+          TAG: staging-v${{ needs.build.outputs.new_version }}
           NOTE: Pre-production test release
         run: |
           echo "Creating release $TAG"
-          gh release create "$TAG" --notes "$NOTE" || true
-          echo "✅ Release created (or already exists): $TAG"
-          echo "🔹 Please manually upload build.zip in GitHub Releases if missing"
+          gh release create "$TAG" build.zip --notes "$NOTE"
 
   deploy-production:
     needs: deploy-staging
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo (for gh/git context)
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v4
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
         with:
           name: build-artifact
 
-      - name: Debug: print resolved versions
-        run: |
-          echo "needs.build.outputs.new_version = '${{ needs.build.outputs.new_version }}'"
-          echo "needs.deploy-staging.outputs.staging_version = '${{ needs.deploy-staging.outputs.staging_version }}'"
-
-      - name: Create Production Release
+      - name: Release Production Build
         id: prod_release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # 正確取用 staging output (由 deploy-staging 的 outputs 提供)
-          TAG: prod-${{ needs.deploy-staging.outputs.staging_version }}
+          TAG: prod-v${{ needs.build.outputs.new_version }}
           NOTE: Production release
         run: |
           set -e
-          if [ -z "$TAG" ]; then
-            echo "❌ ERROR: TAG is empty (production release aborted)"
-            exit 1
-          fi
           echo "Attempting production release $TAG"
-          if gh release create "$TAG" --notes "$NOTE"; then
+          if gh release create "$TAG" build.zip --notes "$NOTE"; then
             echo "✅ Production release succeeded: $TAG"
-            echo "🔹 Please manually upload build.zip in GitHub Releases if missing"
           else
             echo "❌ Production release failed. Attempting cleanup..."
+            # 刪除可能已建立的 release（API via gh）
             if gh release view "$TAG" >/dev/null 2>&1; then
               gh release delete "$TAG" -y || true
             fi
+            # 刪除遠端 tag（若存在）
             git tag -d "$TAG" || true
             git push origin :refs/tags/"$TAG" || true
             exit 1
           fi
+          
+
+   
