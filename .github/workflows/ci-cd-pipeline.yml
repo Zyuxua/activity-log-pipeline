@@ -61,7 +61,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: dev
     outputs:
-      dev_version: ${{ needs.build.outputs.new_version }}
+      dev_version: ${{ steps.set_dev_version.outputs.dev_version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -70,6 +70,10 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: build-artifact
+
+      - name: Set dev_version output
+        id: set_dev_version
+        run: echo "dev_version=${{ needs.build.outputs.new_version }}" >> $GITHUB_OUTPUT
 
       - name: Create Dev Release
         env:
@@ -87,7 +91,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: staging
     outputs:
-      staging_version: ${{ needs.build.outputs.new_version }}
+      staging_version: ${{ steps.set_staging_version.outputs.staging_version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -96,6 +100,10 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: build-artifact
+
+      - name: Set staging_version output
+        id: set_staging_version
+        run: echo "staging_version=${{ needs.build.outputs.new_version }}" >> $GITHUB_OUTPUT
 
       - name: Create Staging Release
         env:
@@ -109,7 +117,7 @@ jobs:
           echo "🔹 Please manually upload build.zip in GitHub Releases"
 
   deploy-production:
-    needs: deploy-staging
+    needs: [deploy-staging, build]
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -124,9 +132,14 @@ jobs:
       - name: Create Production Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: prod-${{ needs.staging_version || needs.build.outputs.new_version }}
+          TAG: prod-${{ needs.deploy-staging.outputs.staging_version }}
           NOTE: Production release
         run: |
+          # Fallback to build version if staging version empty
+          if [ -z "$TAG" ] || [ "$TAG" = "prod-" ]; then
+            TAG="prod-${{ needs.build.outputs.new_version }}"
+          fi
+
           echo "Attempting production release $TAG"
           if gh release create "$TAG" --notes "$NOTE"; then
             echo "✅ Production release succeeded: $TAG"
