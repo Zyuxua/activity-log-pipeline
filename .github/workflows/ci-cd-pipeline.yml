@@ -27,8 +27,8 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Run tests
-        run: npm test
+      - name: Run aggregated tests
+        run: node tests/aggregated-test.js
 
       - name: Build project
         run: |
@@ -65,7 +65,7 @@ jobs:
         with:
           name: build-artifact
 
-      - name: Release Dev Build (create tag + release)
+      - name: Create Dev Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: dev-${{ needs.build.outputs.new_version }}
@@ -89,7 +89,7 @@ jobs:
         with:
           name: build-artifact
 
-      - name: Release Staging Build
+      - name: Create Staging Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: staging-${{ needs.build.outputs.new_version }}
@@ -97,6 +97,7 @@ jobs:
         run: |
           echo "Creating release $TAG"
           gh release create "$TAG" --notes "$NOTE"
+          echo "✅ Release created: $TAG"
           echo "🔹 Please manually upload build.zip in GitHub Releases"
 
   deploy-production:
@@ -112,14 +113,12 @@ jobs:
         with:
           name: build-artifact
 
-      - name: Release Production Build
-        id: prod_release
+      - name: Create Production Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: prod-${{ needs.build.outputs.new_version }}
           NOTE: Production release
         run: |
-          set -e
           echo "Attempting production release $TAG"
           if gh release create "$TAG" --notes "$NOTE"; then
             echo "✅ Production release succeeded: $TAG"
