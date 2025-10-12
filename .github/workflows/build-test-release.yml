@@ -67,7 +67,7 @@ jobs:
         run: |
           echo "Running automated tests..."
           # 執行你的 mock 測試檔
-          node tests/aggregated-test.js
+          node test/aggregated-test.js
 
   release:
     runs-on: ubuntu-latest
