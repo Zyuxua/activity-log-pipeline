@@ -5,3 +5,4 @@ if (process.env.FAIL_UNIT === "1") {
 }
 console.log("Unit tests passed.");
 process.exit(0);
+
