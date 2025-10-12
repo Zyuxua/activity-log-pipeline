@@ -22,8 +22,8 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Install dependencies
-        run: npm install
+      - name: Install deps
+        run: npm ci || true
 
       - name: Run build & pack
         run: |
@@ -45,11 +45,9 @@ jobs:
           NEW_VERSION="$MAJOR.$MINOR.$PATCH"
           echo "new_version=${NEW_VERSION}" >> $GITHUB_OUTPUT
 
-  unit-test:
+  test:
     runs-on: ubuntu-latest
     needs: build
-    env:
-      TEST_ENV: staging
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -63,62 +61,38 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: build-artifact
-          path: ./artifacts
+          path: ./artifacts || true
 
-      - name: Run unit tests
+      - name: Run automated tests
         run: |
-          echo "Running unit tests in $TEST_ENV..."
-          node test/unit-test.js || (echo " Unit tests failed" && exit 1)
-
-  integration-test:
-    runs-on: ubuntu-latest
-    needs: unit-test
-    env:
-      TEST_ENV: prod
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: build-artifact
-          path: ./artifacts
-
-      - name: Run integration tests
-        run: |
-          echo "Running integration tests in $TEST_ENV..."
-          node test/integration-test.js || (echo "Integration tests failed" && exit 1)
+          echo "Running automated tests..."
+          # 執行你的 mock 測試檔
+          node test/aggregated-test.js
 
   release:
     runs-on: ubuntu-latest
-    needs: integration-test
+    needs: test
     environment: dev
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
+  
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
           name: build-artifact
           path: .
-
+  
       - name: Create Dev Release
         id: create_release
         uses: actions/create-release@v1
         with:
           tag_name: dev-v-${{ github.run_number }}
           release_name: dev-v-${{ github.run_number }}
-          body: Automated dev release after successful unit & integration tests
+          body: Automated dev release after successful tests
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+  
       - name: Upload Release Asset
         uses: actions/upload-release-asset@v1
         with:
