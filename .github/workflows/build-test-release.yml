@@ -65,7 +65,7 @@ jobs:
           name: build-artifact
           path: ./artifacts
 
-      - name: Run Unit Tests
+      - name: Run unit tests
         run: |
           echo "Running unit tests in $TEST_ENV..."
           node test/unit-test.js || (echo " Unit tests failed" && exit 1)
@@ -90,7 +90,7 @@ jobs:
           name: build-artifact
           path: ./artifacts
 
-      - name: Run Integration Tests
+      - name: Run integration tests
         run: |
           echo "Running integration tests in $TEST_ENV..."
           node test/integration-test.js || (echo "Integration tests failed" && exit 1)
