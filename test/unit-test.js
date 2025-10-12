@@ -1,7 +1,4 @@
+// 強制模擬單元測試失敗（用於截圖/測試）
 console.log("Running unit tests...");
-if (process.env.FAIL_UNIT === "1") {
-  console.error("Unit tests failed (simulated).");
-  process.exit(1);
-}
-console.log("Unit tests passed.");
-process.exit(0);
+console.error("Unit tests failed (simulated).");
+process.exit(1); // 非 0 = 失敗
