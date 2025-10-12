@@ -22,7 +22,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Install deps
+      - name: Install dependencies
         run: npm install
 
       - name: Run build & pack
@@ -93,7 +93,7 @@ jobs:
       - name: Run Integration Tests
         run: |
           echo "Running integration tests in $TEST_ENV..."
-          node test/integration-test.js || (echo " Integration tests failed" && exit 1)
+          node test/integration-test.js || (echo "Integration tests failed" && exit 1)
 
   release:
     runs-on: ubuntu-latest
