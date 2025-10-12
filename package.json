@@ -8,5 +8,6 @@
     "build": "echo \"Building project...\" && mkdir -p dist && echo 'Built content' > dist/output.txt"
   },
   "author": "Student",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {}
 }
