@@ -68,7 +68,7 @@ jobs:
       - name: Run Unit Tests
         run: |
           echo "Running unit tests..."
-          node tests/unit-test.js || (echo " Unit tests failed" && exit 1)
+          node test/unit-test.js || (echo " Unit tests failed" && exit 1)
 
   integration-test:
     runs-on: ubuntu-latest
@@ -93,7 +93,7 @@ jobs:
       - name: Run Integration Tests
         run: |
           echo "Running integration tests..."
-          node tests/integration-test.js || (echo " Integration tests failed" && exit 1)
+          node test/integration-test.js || (echo " Integration tests failed" && exit 1)
 
   release:
     runs-on: ubuntu-latest
